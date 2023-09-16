@@ -1,0 +1,201 @@
+
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>Générateur d'URL</title>
+    <script>
+        // Add a global error event listener early on in the page load, to help ensure that browsers
+        // which don't support specific functionality still end up displaying a meaningful message.
+        window.addEventListener('error', function (error) {
+            if (OutputDiv && OutputDiv.setStatus) {
+                console.error(error);
+                OutputDiv.setStatus(error.message + ' (Your browser may not support this feature.)');
+                error.preventDefault();
+            }
+        });
+    </script>
+    <!-- Bootstrap CSS CDN -->
+    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet"/>
+</head>
+<body>
+<div class="container mt-5">
+    <div class="row">
+        <div class="col-md-6 offset-md-3">
+            <div class="card">
+                <div class="card-header">
+                    URL Generator
+                </div>
+                <div class="card-body">
+                    <form action="/generate-url" method="GET">
+                        <div class="form-group">
+                            <label for="baseURL">URL de base :</label>
+                            <input class="form-control" id="baseURL" name="baseURL" required="" type="text" value="http://192.168.0.31:3000"/>
+                        </div>
+                        <div class="form-group">
+                            <label for="context">Contexte :</label>
+                            <select class="form-control" id="context" name="context">
+                                <option value="/scan-carte/">/scan-carte/</option>
+                                <option value="/scan-lunette/">/scan-lunette/</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="customText">ID-NFC :</label>
+                            <input class="form-control" id="customText" name="customText" required="" type="text"/>
+                        </div>
+                        <button class="btn btn-primary" type="submit">Programmer le Tag NFC</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="container mt-3">
+        <div class="row">
+            <div class="col-12">
+                <h3 class="mb-3">Journal d'exécution</h3>
+                <div class="output border p-3 bg-light rounded" id="output">
+                    <div class="mb-2" id="status"></div>
+                    <pre class="bg-white p-2 rounded" id="log"></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- Bootstrap JS and Popper.js CDN -->
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.0/umd/popper.min.js"></script>
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+<!-- Bootstrap Modal -->
+<div aria-hidden="true" aria-labelledby="nfcModalLabel" class="modal fade" id="nfcModal" role="dialog" tabindex="-1">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="nfcModalLabel">Écrire sur le Tag NFC</h5>
+                <button aria-label="Close" class="close" data-dismiss="modal" type="button">
+                    <span aria-hidden="true">×</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                Approchez votre carte ou votre lunette connecté vers le lecteur NFC de votre téléphone.
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+    var OutputDiv = {
+        log: function () {
+            var line = Array.prototype.slice.call(arguments).map(function (argument) {
+                return typeof argument === 'string' ? argument : JSON.stringify(argument);
+            }).join(' ');
+
+            document.querySelector('#log').textContent += line + '\n';
+        },
+        setStatus: function (status) {
+            document.querySelector('#status').textContent = status;
+        }
+    };
+</script>
+<script>
+    if (/Chrome\/(\d+\.\d+.\d+.\d+)/.test(navigator.userAgent)) {
+        // Let's log a warning if the sample is not supposed to execute on this
+        // version of Chrome.
+        if (89 > parseInt(RegExp.$1)) {
+            alert('Vous devez mettre à jour votre navigateur avant de poursuivre, version minimum ' + 89 + '.');
+        }
+    }
+</script>
+<script>
+    log = OutputDiv.log;
+
+    if (!("NDEFReader" in window))
+        alert("Web NFC n'est pas disponible sur ce dispositif. Utilisez Chrome sur Android.");
+</script>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+
+        // Retrieve values from localStorage and populate the form
+        const form = document.querySelector('form');
+        if (form) {
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                const value = localStorage.getItem(key);
+                const input = form.querySelector(`[name="${key}"]`);
+                if (input) {
+                    input.value = value;
+                }
+            }
+        }
+
+        // Request permission for NFC
+        navigator.permissions.query({name: 'nfc'}).then(async (permissionStatus) => {
+            if (permissionStatus.state === 'granted') {
+                // Permission granted
+                document.querySelector('form').addEventListener('submit', async function (event) {
+                    event.preventDefault();
+                    OutputDiv.log('Ordre de programmation reçu.');
+
+                    // Store form values in localStorage on submission
+                    const formData = new FormData(form);
+                    for (const [key, value] of formData.entries()) {
+                        localStorage.setItem(key, value);
+                    }
+
+                    const baseURL = document.getElementById('baseURL').value;
+                    const context = document.getElementById('context').value;
+                    const customText = document.getElementById('customText').value;
+                    const fullURL = baseURL + context + customText;
+
+                    // Check if URL already exists in localStorage
+                    let existingURLs = JSON.parse(localStorage.getItem('generatedURLs')) || [];
+                    if (existingURLs.includes(fullURL)) {
+                        OutputDiv.log('URL already exists: ' + fullURL);
+                        alert('Cette URL a déjà été programmée. Choisissez-en une autre.');
+                        return;
+                    }
+
+                    // Show the modal
+                    $('#nfcModal').modal('show');
+
+                    OutputDiv.log('URL programmée : ' + fullURL);
+
+                    try {
+                        const writer = new NDEFReader();
+                        await writer.write({
+                            records: [{
+                                recordType: "url",
+                                data: fullURL
+                            }]
+                        });
+
+                        // If URL is new, add to localStorage
+                        existingURLs.push(fullURL);
+                        localStorage.setItem('generatedURLs', JSON.stringify(existingURLs));
+
+                        // Hide the modal
+                        $('#nfcModal').modal('hide');
+
+                        OutputDiv.log('URL écrite avec succès sur le tag NFC.');
+                        alert('URL écrite avec succès sur le tag NFC.');
+                    } catch (error) {
+                        OutputDiv.log('Erreur de traitement NFC: ' + error.message);
+                        alert('Erreur de traitement NFC: ' + error.message);
+                    }
+                });
+            } else if (permissionStatus.state === 'denied') {
+                // Permission denied
+                alert("Vous avez désactivé le WebNFC sur ce navigateur. Changez vos préférences pour continuer.");
+                // Disable the form and other inputs/buttons
+                document.querySelector('form').disabled = true;
+            } else {
+                // Permission prompt or unknown state
+                alert("Vous devez accepter l'authorisation NFC pour ce domaine.");
+                // Disable the form and other inputs/buttons
+                document.querySelector('form').disabled = true;
+            }
+        });
+    });
+</script>
+</body>
+</html>
