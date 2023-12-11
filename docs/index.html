@@ -190,9 +190,13 @@
                 document.querySelector('form').disabled = true;
             } else {
                 // Permission prompt or unknown state
-                alert("Vous devez accepter l'authorisation NFC pour ce domaine.");
+                alert("Vous devez accepter l'authorisation NFC pour ce domaine et recharger la page.");
                 // Disable the form and other inputs/buttons
                 document.querySelector('form').disabled = true;
+
+                const ndef = new NDEFReader();
+                // Prompt user to allow website to interact with NFC devices.
+                await ndef.scan();
             }
         });
     });
