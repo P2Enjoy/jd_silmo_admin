@@ -1,1 +1,1 @@
-# jd_silmo_admin
+# jd_admin
