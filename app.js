@@ -22,5 +22,5 @@ app.get('/generate-url', (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`Server is running on http://martino.p2enjoy.studio:${PORT}`);
+    console.log(`Server is running on http://172.19.0.100:${PORT}`);
 });
